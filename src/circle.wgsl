@@ -25,12 +25,16 @@ fn vs_main(vertex: VertexInput, ) -> VertexOutput {
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let aspect_ratio = 800.0 / 600.0;
-    var centered_uv = in.uv - 0.5;
+    var centered_uv = in.uv;
     centered_uv.x *= aspect_ratio;
     let dist = length(centered_uv);
-    let radius = 0.3;
+    let radius = 0.9;
     if (dist < radius) {
-        return vec4<f32>(1.0, 1.0, 1.0, 1.0);
+        if (dist < radius - 0.02) {
+            return vec4<f32>(0.0, 0.0, 0.0, 1.0);
+        } else {
+            return vec4<f32>(1.0, 1.0, 1.0, 1.0);
+        }
     } else {
         return vec4<f32>(0.0, 0.0, 0.0, 1.0);
     }
