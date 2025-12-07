@@ -70,38 +70,11 @@ impl ApplicationHandler for App {
             };
             surface.configure(&device, &config);
 
+            let shader_str = include_str!("circle.wgsl");
+
             let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: Some("Shader"),
-                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(r#"
-                    struct VertexOutput {
-                        @builtin(position) clip_position: vec4<f32>,
-                        @location(0) uv: vec2<f32>,
-                    };
-
-                    @vertex
-                    fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
-                        var out: VertexOutput;
-                        let x = f32(i32(in_vertex_index) - 1);
-                        let y = f32(i32(in_vertex_index & 1u) * 2 - 1);
-                        out.clip_position = vec4<f32>(x, y, 0.0, 1.0);
-                        out.uv = vec2<f32>(x, -y) * 0.5 + 0.5;
-                        return out;
-                    }
-
-                    @fragment
-                    fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-                    let aspect_ratio = 800.0 / 600.0;
-                    var centered_uv = in.uv - 0.5;
-                    centered_uv.x *= aspect_ratio;
-                    let dist = length(centered_uv);
-                    let radius = 0.3;
-                    if (dist < radius) {
-                        return vec4<f32>(1.0, 1.0, 1.0, 1.0);
-                    } else {
-                        return vec4<f32>(0.0, 0.0, 0.0, 1.0);
-                    }
-                }
-            "#)),
+                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(shader_str)),
             });
 
             let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
