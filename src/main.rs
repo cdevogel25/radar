@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::sync::Arc;
+use std::time::Instant;
 use winit::{
     application::ApplicationHandler,
     dpi::LogicalSize,
@@ -16,6 +17,10 @@ struct WgpuState {
     pipeline: wgpu::RenderPipeline,
     // keep the window here so it doesn't get dropped
     window: Arc<Window>,
+
+    uniform_buffer: wgpu::Buffer,
+    uniform_bind_group: wgpu::BindGroup,
+    start_time: Instant,
 }
 
 struct App {
@@ -77,9 +82,46 @@ impl ApplicationHandler for App {
                 source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(shader_str)),
             });
 
+            let uniform_bind_group_layout =
+                device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("uniform_bind_group_layout"),
+                    entries: &[wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT | wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    }]
+                });
+
+            let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Pipeline Layout"),
+                bind_group_layouts: &[&uniform_bind_group_layout],
+                push_constant_ranges: &[],
+            });
+
+            let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Uniform Buffer"),
+                size: 16,
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+
+            let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &uniform_bind_group_layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: uniform_buffer.as_entire_binding(),
+                }],
+                label: Some("uniform_bind_group"),
+            });
+
             let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("Render Pipeline"),
-                layout: None,
+                layout: Some(&pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: &shader,
                     entry_point: Some("vs_main"),
@@ -110,6 +152,9 @@ impl ApplicationHandler for App {
                 config,
                 pipeline,
                 window,
+                uniform_buffer,
+                uniform_bind_group,
+                start_time: Instant::now(),
             }
         });
 
@@ -144,6 +189,21 @@ impl ApplicationHandler for App {
             }
 
             WindowEvent::RedrawRequested => {
+                let elapsed = state.start_time.elapsed().as_secs_f32();
+
+                let rotations_per_second = 0.1;
+                let angle = (elapsed * rotations_per_second * std::f32::consts::TAU) % std::f32::consts::TAU;
+                let aspect = state.config.width as f32 / state.config.height as f32;
+                let radius = 0.9f32;
+
+                let mut data = [0u8; 16];
+                data[0..4].copy_from_slice(&angle.to_le_bytes());
+                data[4..8].copy_from_slice(&aspect.to_le_bytes());
+                data[8..12].copy_from_slice(&radius.to_le_bytes());
+                data[12..16].copy_from_slice(&0f32.to_le_bytes());
+
+                state.queue.write_buffer(&state.uniform_buffer, 0, &data);
+
                 let frame = match state.surface.get_current_texture() {
                     Ok(frame) => frame,
                     Err(wgpu::SurfaceError::Outdated) => return,
@@ -172,6 +232,7 @@ impl ApplicationHandler for App {
                         occlusion_query_set: None,
                     });
                     rpass.set_pipeline(&state.pipeline);
+                    rpass.set_bind_group(0, &state.uniform_bind_group, &[]);
                     rpass.draw(0..3, 0..1);
                 }
 
