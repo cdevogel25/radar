@@ -238,6 +238,8 @@ impl ApplicationHandler for App {
 
                 state.queue.submit(std::iter::once(encoder.finish()));
                 frame.present();
+
+                state.window.request_redraw();
             }
             _ => {}
         }
@@ -249,7 +251,7 @@ fn main() {
 
     let event_loop = EventLoop::new().unwrap();
 
-    event_loop.set_control_flow(ControlFlow::Wait);
+    event_loop.set_control_flow(ControlFlow::Poll);
 
     let mut app = App { state: None };
 
